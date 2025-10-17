@@ -45,8 +45,8 @@ usage() {
     echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo
     echo -e "${GRAY}Examples:${RESET}"
-    echo -e "  ${WHITE}$ ./locker.sh -l${RESET}     ${GRAY}# Encrypt a file${RESET}"
-    echo -e "  ${WHITE}$ ./locker.sh -u${RESET}     ${GRAY}# Decrypt a file${RESET}"
+    echo -e "  ${WHITE}$ locker.sh -l${RESET}     ${GRAY}# Encrypt a file${RESET}"
+    echo -e "  ${WHITE}$ locker.sh -u${RESET}     ${GRAY}# Decrypt a file${RESET}"
     echo
 }
 
@@ -99,6 +99,58 @@ if [[ "$1" == "-lock" || "$1" == "-l" ]]; then
     
     echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo
+    echo -e "${CYAN}${BOLD}[LOCATION] OUTPUT LOCATION${RESET}"
+    echo -e "${GRAY}Note: Use Linux paths like /mnt/c/... or relative paths${RESET}"
+    echo
+    read -p "$(echo -e ${WHITE}Save encrypted file in a different location? ${GRAY}\(y/n\)${WHITE}: ${RESET})" choice
+    echo
+    
+    output_file="$file.enc"
+    
+    if [[ "$choice" == "y" || "$choice" == "Y" ]]; then
+        read -p "$(echo -e ${WHITE}Enter full folder path: ${RESET})" custom_path
+        echo
+        
+        # Convert Windows path to WSL path if needed
+        if [[ "$custom_path" =~ ^[A-Za-z]:[/\\] ]]; then
+            echo -e "${YELLOW}${BOLD}[!] INFO:${RESET} ${YELLOW}Converting Windows path to WSL format...${RESET}"
+            drive_letter=$(echo "$custom_path" | grep -o '^[A-Za-z]:' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+            path_without_drive=$(echo "$custom_path" | sed 's/^[A-Za-z]:[/\\]//' | sed 's/\\/\//g')
+            custom_path="/mnt/$drive_letter/$path_without_drive"
+            echo -e "${GRAY}    └─ Converted to: ${WHITE}$custom_path${RESET}"
+            echo
+        fi
+        
+        # Remove trailing slash if present
+        custom_path="${custom_path%/}"
+        
+        # Check if directory exists
+        if [[ ! -d "$custom_path" ]]; then
+            echo -e "${YELLOW}${BOLD}[!] WARNING:${RESET} ${YELLOW}Directory does not exist. Creating it...${RESET}"
+            mkdir -p "$custom_path" 2>/dev/null
+            
+            if [[ $? -ne 0 ]]; then
+                echo -e "${RED}${BOLD}[✗] ERROR:${RESET} ${RED}Failed to create directory${RESET}"
+                echo
+                exit 1
+            fi
+            echo -e "${GREEN}${BOLD}[✓] SUCCESS:${RESET} ${GREEN}Directory created${RESET}"
+            echo
+        fi
+        
+        # Get just the filename
+        filename=$(basename "$file")
+        output_file="$custom_path/$filename.enc"
+        
+        echo -e "${GRAY}    └─ Output will be saved to: ${WHITE}$output_file${RESET}"
+        echo
+    else
+        echo -e "${GRAY}    └─ Output will be saved to: ${WHITE}$output_file${RESET}"
+        echo
+    fi
+    
+    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo
     echo -ne "${YELLOW}${BOLD}[⟳] ENCRYPTING${RESET} ${YELLOW}Please wait"
     for i in {1..3}; do
         sleep 0.3
@@ -109,13 +161,13 @@ if [[ "$1" == "-lock" || "$1" == "-l" ]]; then
     
     if openssl enc -aes-256-cbc -pbkdf2 -salt \
         -pass pass:"$password" \
-        -in "$file" -out "$file".enc 2>/dev/null; then
+        -in "$file" -out "$output_file" 2>/dev/null; then
         
         rm -f "$file"
         echo -e "${GREEN}${BOLD}[✓] ENCRYPTION SUCCESSFUL${RESET}"
         echo
         echo -e "${GRAY}    ┌─ Output Details${RESET}"
-        echo -e "${GRAY}    ├─ Encrypted file: ${WHITE}$file.enc${RESET}"
+        echo -e "${GRAY}    ├─ Encrypted file: ${WHITE}$output_file${RESET}"
         echo -e "${GRAY}    ├─ Algorithm: ${WHITE}AES-256-CBC${RESET}"
         echo -e "${GRAY}    └─ Original file: ${WHITE}Securely removed${RESET}"
     else
@@ -145,8 +197,7 @@ elif [[ "$1" == '-unlock' || "$1" == "-u" ]]; then
         echo
         exit 1
     fi
-    
-    # Get file size
+      # Get file size
     size=$(du -h "$file.enc" 2>/dev/null | cut -f1)
     echo -e "${GREEN}${BOLD}[✓] SUCCESS:${RESET} ${GREEN}Encrypted file located${RESET}"
     echo -e "${GRAY}    └─ File: ${WHITE}$file.enc${RESET}"
